@@ -1,51 +1,51 @@
+import os
+
+import lightning as L
 import torch
-import torchvision
-import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
-import numpy as np
+from torch.utils.data import DataLoader, random_split
+from torchvision import transforms
 
-class Dataset():
-    def __init__(self, transform, trainset, trainloader, testset, testloader):
-        self.transform = transform
-        self.trainset = trainset
-        self.trainloader = trainloader
-        self.testset = testset
-        self.testloader = testloader
+from torchvision.datasets import CIFAR10
 
-    transform = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
+BATCH_SIZE = 256 if torch.cuda.is_available() else 64
 
-    batch_size = 4
+class CIFAR10DataModule(L.LightningDataModule):
+    def __init__(self, data_dir: str = PATH_DATASETS):
+        super().__init__()
+        self.data_dir = data_dir
+        self.transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
 
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                              shuffle=True, num_workers=2)
+        self.dims = (1, 28, 28)
+        self.num_classes = 10
+        self.classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                           download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                             shuffle=False, num_workers=2)
+    def prepare_data(self):
+        # download
+        CIFAR10(self.data_dir, train=True, download=True)
+        CIFAR10(self.data_dir, train=False, download=True)
 
-    classes = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    def setup(self, stage=None):
+        # Assign train/val datasets for use in dataloaders
+        if stage == "fit" or stage is None:
+            cifar10_full = CIFAR10(self.data_dir, train=True, transform=self.transform)
+            self.cifar10_train, self.cifar10_val = random_split(cifar10_full, [55000, 5000])
 
+        # Assign test dataset for use in dataloader(s)
+        if stage == "test" or stage is None:
+            self.cifar10_test = CIFAR10(self.data_dir, train=False, transform=self.transform)
 
-'''
-def imshow(img):
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
+    def train_dataloader(self):
+        return DataLoader(self.cifar10_train, batch_size=BATCH_SIZE)
 
+    def val_dataloader(self):
+        return DataLoader(self.cifar10_val, batch_size=BATCH_SIZE)
 
-if __name__ == '__main__':
-    # get some random training images
-    dataiter = iter(trainloader)
-    images, labels = next(dataiter)
-    # show images
-    imshow(torchvision.utils.make_grid(images))
-    # print labels
-    print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
-'''
+    def test_dataloader(self):
+        return DataLoader(self.cifar10_test, batch_size=BATCH_SIZE)

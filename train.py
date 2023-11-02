@@ -1,34 +1,16 @@
-import torch.nn as nn
-import torch.optim as optim
-from model import Net
-from data_loader import Dataset
+import lightning as L
+from model import LitModel
+from data_loader import CIFAR10DataModule
+from lightning.pytorch.loggers import WandbLogger
 
-net = Net()
+wandb_logger = WandbLogger(project="CIFAR10 Logging")
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-
-if __name__ == '__main__':
-    for epoch in range(2):  # loop over the dataset multiple times
-
-        running_loss = 0.0
-        for i, data in enumerate(Dataset.trainloader, 0):
-            # get the inputs; data is a list of [inputs, labels]
-            inputs, labels = data
-
-            # zero the parameter gradients
-            optimizer.zero_grad()
-
-            # forward + backward + optimize
-            outputs = net(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-            # print statistics
-            running_loss += loss.item()
-            if i % 2000 == 1999:    # print every 2000 mini-batches
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
-                running_loss = 0.0
-
-    print('Finished Training')
+dm = CIFAR10DataModule()
+model = LitModel(*dm.dims, dm.num_classes, hidden_size=256)
+trainer = L.Trainer(
+    max_epochs=5,
+    accelerator="auto",
+    devices=1,
+    logger=wandb_logger,
+)
+trainer.fit(model, dm)
